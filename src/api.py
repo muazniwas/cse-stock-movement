@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import List, Optional
 from fastapi import FastAPI, HTTPException
@@ -7,6 +8,18 @@ from pydantic import BaseModel, Field
 import pandas as pd
 
 from src.predictor import StockMovementPredictor
+
+# ---------- Load feature metadata from JSON ----------
+FEATURE_METADATA_PATH = Path("data/feature_metadata.json")
+
+with open(FEATURE_METADATA_PATH, "r") as f:
+    FEATURE_METADATA = json.load(f)
+
+FEATURES = [f["name"] for f in FEATURE_METADATA]
+
+MIN_HISTORY_ROWS = 10
+MODEL_TYPE = "LightGBM (GBDT binary classifier)"
+MODEL_FILE = "models/lightgbm_stock.txt"
 
 app = FastAPI(title="CSE Stock Movement API", version="1.0")
 
@@ -74,4 +87,17 @@ def get_symbols():
     return {
         "count": len(AVAILABLE_SYMBOLS),
         "symbols": AVAILABLE_SYMBOLS
+    }
+
+@app.get("/model/info")
+def model_info():
+    return {
+        "model_type": MODEL_TYPE,
+        "model_file": MODEL_FILE,
+        "threshold": predictor.threshold,
+        "min_history_rows": MIN_HISTORY_ROWS,
+        "feature_count": len(FEATURES),
+        "features": FEATURE_METADATA,
+        "symbols_count": len(AVAILABLE_SYMBOLS),
+        "symbols": AVAILABLE_SYMBOLS,
     }

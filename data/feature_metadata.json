@@ -1,0 +1,77 @@
+[
+  {
+      "name": "low",
+      "description": "Lowest traded price of the day.",
+      "category": "price"
+  },
+  {
+      "name": "high",
+      "description": "Highest traded price of the day.",
+      "category": "price"
+  },
+  {
+      "name": "close",
+      "description": "Closing price of the day.",
+      "category": "price"
+  },
+  {
+      "name": "volume",
+      "description": "Number of shares traded during the day.",
+      "category": "volume"
+  },
+  {
+      "name": "return_1d",
+      "description": "1-day percentage return, capturing short-term momentum.",
+      "category": "momentum"
+  },
+  {
+      "name": "return_3d",
+      "description": "3-day percentage return, capturing multi-day momentum.",
+      "category": "momentum"
+  },
+  {
+      "name": "return_5d",
+      "description": "5-day percentage return, capturing short-term trend.",
+      "category": "momentum"
+  },
+  {
+      "name": "ma_5",
+      "description": "5-day moving average of closing price.",
+      "category": "trend"
+  },
+  {
+      "name": "ma_10",
+      "description": "10-day moving average of closing price.",
+      "category": "trend"
+  },
+  {
+      "name": "ma_ratio_5",
+      "description": "Ratio of close price to 5-day moving average, measuring deviation from short-term trend.",
+      "category": "trend"
+  },
+  {
+      "name": "volatility_5",
+      "description": "5-day rolling standard deviation of daily returns, representing recent volatility.",
+      "category": "risk"
+  },
+  {
+      "name": "vol_chg",
+      "description": "Day-over-day percentage change in trading volume.",
+      "category": "volume"
+  },
+  {
+      "name": "vol_ma_5",
+      "description": "5-day moving average of trading volume.",
+      "category": "volume"
+  },
+  {
+      "name": "hl_range",
+      "description": "Normalized daily trading range: (high − low) / close.",
+      "category": "price_action"
+  },
+  {
+      "name": "symbol_enc",
+      "description": "Encoded stock symbol allowing the model to learn stock-specific behavior.",
+      "category": "categorical"
+  }
+]
