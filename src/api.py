@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import List, Optional
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
@@ -15,6 +16,11 @@ predictor = StockMovementPredictor.load(
     train_csv_path_for_encoder="data/train.csv",
     threshold=0.5
 )
+
+# Load available symbols (once)
+TRAIN_CSV_PATH = "data/train.csv"
+_symbols_df = pd.read_csv(TRAIN_CSV_PATH)
+AVAILABLE_SYMBOLS = sorted(_symbols_df["symbol"].astype(str).unique().tolist())
 
 # ---------- Request / Response Schemas ----------
 
@@ -62,3 +68,10 @@ def predict(req: PredictRequest):
         prediction=result["prediction"],
         threshold=result["threshold"]
     )
+
+@app.get("/symbols")
+def get_symbols():
+    return {
+        "count": len(AVAILABLE_SYMBOLS),
+        "symbols": AVAILABLE_SYMBOLS
+    }
