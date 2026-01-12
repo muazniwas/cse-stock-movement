@@ -12,6 +12,7 @@ import shap
 import time
 from datetime import datetime, timezone
 import httpx
+from fastapi.middleware.cors import CORSMiddleware
 
 from src.predictor import StockMovementPredictor
 
@@ -107,6 +108,17 @@ async def _fetch_chart_data(client: httpx.AsyncClient, stock_id: int, period: in
     return j["chartData"]
 
 app = FastAPI(title="CSE Stock Movement API", version="1.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Load once at startup
 predictor = StockMovementPredictor.load(
