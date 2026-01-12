@@ -9,6 +9,9 @@ import pandas as pd
 from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score, accuracy_score
 import numpy as np
 import shap
+import time
+from datetime import datetime, timezone
+import httpx
 
 from src.predictor import StockMovementPredictor
 
@@ -66,6 +69,42 @@ FEATURES = [f["name"] for f in FEATURE_METADATA]
 MIN_HISTORY_ROWS = 10
 MODEL_TYPE = "LightGBM (GBDT binary classifier)"
 MODEL_FILE = "models/lightgbm_stock.txt"
+
+CSE_HOME_COMPANY_DATA_URL = "https://www.cse.lk/api/homeCompanyData"
+CSE_COMPANY_CHART_URL = "https://www.cse.lk/api/companyChartDataByStock"
+
+# Simple in-memory cache: { key: (expires_epoch, data) }
+_HISTORY_CACHE: dict[str, tuple[float, dict]] = {}
+CACHE_TTL_SECONDS = 300
+
+def _normalize_symbol(symbol: str) -> str:
+    s = symbol.strip().upper()
+    if not s.endswith(".N0000"):
+        s = f"{s}.N0000"
+    return s
+
+def _ms_to_yyyy_mm_dd(ms: int) -> str:
+    # CSE returns epoch milliseconds; convert to UTC date string
+    dt = datetime.fromtimestamp(ms / 1000.0, tz=timezone.utc)
+    return dt.date().isoformat()
+
+async def _fetch_stock_id(client: httpx.AsyncClient, symbol_n0000: str) -> int:
+    # form-data body: symbol=<SYMBOL>.N0000
+    r = await client.post(CSE_HOME_COMPANY_DATA_URL, data={"symbol": symbol_n0000})
+    r.raise_for_status()
+    j = r.json()
+    if "id" not in j:
+        raise ValueError(f"Unexpected response from homeCompanyData: {j}")
+    return int(j["id"])
+
+async def _fetch_chart_data(client: httpx.AsyncClient, stock_id: int, period: int = 5) -> list[dict]:
+    # form-data body: stockId=<id>, period=1
+    r = await client.post(CSE_COMPANY_CHART_URL, data={"stockId": str(stock_id), "period": str(period)})
+    r.raise_for_status()
+    j = r.json()
+    if "chartData" not in j or not isinstance(j["chartData"], list):
+        raise ValueError(f"Unexpected response from companyChartDataByStock: {j}")
+    return j["chartData"]
 
 app = FastAPI(title="CSE Stock Movement API", version="1.0")
 
@@ -204,3 +243,83 @@ def model_info():
 @app.get("/model/metrics")
 def model_metrics():
     return MODEL_METRICS
+
+@app.get("/history/{symbol}")
+async def history(symbol: str, n: int = 15, period: int = 5):
+    """
+    Returns latest N OHLCV rows for a symbol.
+    Uses CSE:
+      1) /api/homeCompanyData (symbol -> stockId)
+      2) /api/companyChartDataByStock (stockId -> chartData)
+    Maps:
+      high=h, low=l, close=p, volume=q, date from t (ms)
+    """
+    if n < 10:
+        # you can allow smaller, but your model needs >=10
+        n = 10
+
+    symbol_n0000 = _normalize_symbol(symbol)
+    cache_key = f"{symbol_n0000}|n={n}|period={period}"
+    now = time.time()
+
+    # Cache hit?
+    cached = _HISTORY_CACHE.get(cache_key)
+    if cached and cached[0] > now:
+        return cached[1]
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            stock_id = await _fetch_stock_id(client, symbol_n0000)
+            chart_data = await _fetch_chart_data(client, stock_id=stock_id, period=period)
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=502, detail=f"CSE upstream error: {e.response.status_code}")
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=502, detail=f"CSE upstream request failed: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    # Sort by timestamp descending and take first n
+    # Some rows may have missing fields; we'll filter those out.
+    chart_data_sorted = sorted(chart_data, key=lambda x: x.get("t", 0), reverse=True)
+
+    rows = []
+    for item in chart_data_sorted:
+        t = item.get("t")
+        h = item.get("h")
+        l = item.get("l")
+        p = item.get("p")  # close
+        q = item.get("q")  # volume per your note
+
+        if t is None or h is None or l is None or p is None or q is None:
+            continue
+
+        rows.append({
+            "date": _ms_to_yyyy_mm_dd(int(t)),
+            "low": float(l),
+            "high": float(h),
+            "close": float(p),
+            "volume": float(q),
+        })
+
+        if len(rows) >= n:
+            break
+
+    if len(rows) < 10:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Not enough valid history rows returned for {symbol_n0000}. Got {len(rows)}",
+        )
+
+    payload = {
+        "symbol": symbol_n0000,
+        "stock_id": stock_id,
+        "period": period,
+        "count": len(rows),
+        # return oldest->newest
+        "history": list(reversed(rows)),
+    }
+
+    # Store in cache
+    _HISTORY_CACHE[cache_key] = (now + CACHE_TTL_SECONDS, payload)
+    return payload
+
