@@ -1,11 +1,36 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+Minimal UI frontend for the FastAPI backend.
 
-## Getting Started
+## Tech Stack
+- Next.js (App Router)
+- TypeScript
+- TailwindCSS
+- Yarn
 
-First, run the development server:
+---
 
+## Setup
+
+Install dependencies:
+```bash
+yarn
+```
+
+Create environment file: `frontend/.env.local`
+```bash
+NEXT_PUBLIC_API_BASE=http://127.0.0.1:8000
+```
+
+## Run (Development)
+
+Start the backend first (from repo root):
+
+```bash
+python -m uvicorn src.api:app --reload --port 8000
+```
+
+Start the frontend (from frontend/):
 ```bash
 yarn dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open: http://localhost:3000
