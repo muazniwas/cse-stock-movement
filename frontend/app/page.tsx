@@ -77,12 +77,15 @@ export default function HomePage() {
 
   return (
     <main className="p-6 max-w-6xl mx-auto space-y-6">
-      <h1 className="text-2xl font-bold">
+      <h1 className="text-2xl font-bold mb-2">
         CSE Stock Movement Prediction (LightGBM)
       </h1>
+      <a className="text-blue-600 underline" href="/model">
+        View model info & metrics →
+      </a>
 
       {/* --- Symbol selector --- */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4 mt-2">
         <label className="font-medium">Symbol:</label>
         <select
           value={selectedSymbol}
