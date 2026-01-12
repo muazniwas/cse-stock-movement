@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 import pandas as pd
 from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score, accuracy_score
 import numpy as np
+import shap
 
 from src.predictor import StockMovementPredictor
 
@@ -86,6 +87,9 @@ MODEL_METRICS = load_model_metrics(
     train_csv_path="data/train.csv"
 )
 
+# ---------- SHAP explainer (loaded once) ----------
+SHAP_EXPLAINER = shap.TreeExplainer(predictor.model)
+
 # ---------- Request / Response Schemas ----------
 
 class OhlcvRow(BaseModel):
@@ -131,6 +135,51 @@ def predict(req: PredictRequest):
         prediction=result["prediction"],
         threshold=result["threshold"]
     )
+
+@app.post("/explain")
+def explain(req: PredictRequest):
+    if len(req.history) < MIN_HISTORY_ROWS:
+        raise HTTPException(status_code=400, detail=f"history must contain at least {MIN_HISTORY_ROWS} rows")
+
+    df = pd.DataFrame([r.model_dump() for r in req.history])
+    df["symbol"] = req.symbol
+
+    try:
+        # Build features
+        X = predictor.feature_builder.build_features_from_history(df, symbol=req.symbol)
+        X = X[FEATURES]
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Prediction
+    prob_up = float(predictor.model.predict(X)[0])
+    pred = 1 if prob_up >= predictor.threshold else 0
+
+    # SHAP values
+    shap_values = SHAP_EXPLAINER.shap_values(X)[0]   # (n_features,)
+    base_value = float(SHAP_EXPLAINER.expected_value)
+
+    # Build contribution list
+    contribs = []
+    for i, col in enumerate(X.columns):
+        contribs.append({
+            "feature": col,
+            "value": float(X.iloc[0][col]),
+            "shap_value": float(shap_values[i])
+        })
+
+    # Sort by absolute impact
+    contribs = sorted(contribs, key=lambda x: abs(x["shap_value"]), reverse=True)
+
+    return {
+        "symbol": req.symbol,
+        "prob_up": prob_up,
+        "prediction": pred,
+        "threshold": predictor.threshold,
+        "base_value": base_value,
+        "top_contributions": contribs[:10],  # top 10 features
+        "all_contributions": contribs        # full list (optional for frontend)
+    }
 
 @app.get("/symbols")
 def get_symbols():
