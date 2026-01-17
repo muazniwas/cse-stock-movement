@@ -11,24 +11,24 @@ df = df.sort_values(["symbol", "date"]).reset_index(drop=True)
 def add_features(group: pd.DataFrame) -> pd.DataFrame:
     g = group.copy()
 
-    # --- Returns ---
+    # --- Returns --- Momentum - to capture short-term price direction
     g["return_1d"] = g["close"].pct_change(1)
     g["return_3d"] = g["close"].pct_change(3)
     g["return_5d"] = g["close"].pct_change(5)
 
-    # --- Moving averages ---
+    # --- Moving averages --- Trend - to assess whether a stock was trading above or below its short-term trend
     g["ma_5"] = g["close"].rolling(5).mean()
     g["ma_10"] = g["close"].rolling(10).mean()
     g["ma_ratio_5"] = g["close"] / g["ma_5"]
 
-    # --- Volatility ---
+    # --- Volatility --- Represent recent market instability
     g["volatility_5"] = g["return_1d"].rolling(5).std()
 
-    # --- Volume ---
+    # --- Volume --- To capture shifts in liquidity and trading interest
     g["vol_chg"] = g["volume"].pct_change(1)
     g["vol_ma_5"] = g["volume"].rolling(5).mean()
 
-    # --- Daily range ---
+    # --- Daily range --- To reflect intraday dispersion and trading pressure
     g["hl_range"] = (g["high"] - g["low"]) / g["close"]
 
     return g

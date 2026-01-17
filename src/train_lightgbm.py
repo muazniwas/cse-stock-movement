@@ -34,7 +34,7 @@ X_train, y_train = train_df[FEATURES], train_df[TARGET]
 X_val, y_val = val_df[FEATURES], val_df[TARGET]
 X_test, y_test = test_df[FEATURES], test_df[TARGET]
 
-# Handle imbalance
+# Handle imbalance - penalizes mistakes on the minority class more heavily during training.
 scale_pos_weight = (y_train == 0).sum() / (y_train == 1).sum()
 
 print("scale_pos_weight:", round(scale_pos_weight, 3))
@@ -44,16 +44,16 @@ lgb_train = lgb.Dataset(X_train, y_train)
 lgb_val = lgb.Dataset(X_val, y_val, reference=lgb_train)
 
 params = {
-    "objective": "binary",
-    "metric": ["binary_logloss", "auc"],
+    "objective": "binary", # Binary log-loss objective, appropriate for probabilistic binary classification
+    "metric": ["binary_logloss", "auc"], # AUC since dataset is imbalanced
     "boosting_type": "gbdt",
     "learning_rate": 0.05,
     "num_leaves": 31,
     "max_depth": -1,
-    "min_data_in_leaf": 30,
-    "feature_fraction": 0.8,
-    "bagging_fraction": 0.8,
-    "bagging_freq": 5,
+    "min_data_in_leaf": 30, # Prevent tiny overfitted leaves
+    "feature_fraction": 0.8, # Randomly sample 80% of features
+    "bagging_fraction": 0.8, # Randomly sample 80% of rows
+    "bagging_freq": 5, # Re-sample every 5 iterations
     "scale_pos_weight": scale_pos_weight,
     "seed": 42,
     "verbosity": -1
@@ -64,9 +64,9 @@ model = lgb.train(
     lgb_train,
     valid_sets=[lgb_train, lgb_val],
     valid_names=["train", "val"],
-    num_boost_round=1000,
+    num_boost_round=1000, # trains up to 1000 trees
     callbacks=[
-        lgb.early_stopping(stopping_rounds=50),
+        lgb.early_stopping(stopping_rounds=50), # Stop training if validation loss does not improve for 50 consecutive rounds
         lgb.log_evaluation(50)
     ]
 )
